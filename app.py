@@ -1,28 +1,28 @@
 from flask import Flask, render_template, request, redirect
 import sqlite3
 from datetime import datetime
-import os 
+import os
 
 app = Flask(__name__)
 
-# --- Use a temporary path for the database (works in Docker/Render) ---
+# --- Use a container-safe path for the database ---
 DB_PATH = "/tmp/expenses.db"
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH) 
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
-# --- Initialize database if it doesn't exist ---
+# --- Initialize database and tables at startup ---
 def init_db():
     conn = get_db_connection()
-    conn.execute('''
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS members (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT UNIQUE NOT NULL
         )
-    ''')
-    conn.execute('''
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS expenses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             member_id INTEGER NOT NULL,
@@ -31,13 +31,14 @@ def init_db():
             date TEXT NOT NULL,
             FOREIGN KEY(member_id) REFERENCES members(id)
         )
-    ''')
+    """)
     conn.commit()
     conn.close()
 
-init_db()  # Ensure tables exist at startup
+init_db()  # Ensure tables exist before handling requests
 
-# --- Routes ---
+# --- ROUTES ---
+
 @app.route('/')
 def index():
     conn = get_db_connection()
@@ -54,7 +55,7 @@ def index():
 @app.route('/add_member', methods=['POST'])
 def add_member():
     name = request.form.get('member_name')
-    if name: 
+    if name:
         conn = get_db_connection()
         conn.execute('INSERT OR IGNORE INTO members (name) VALUES (?)', (name,))
         conn.commit()
@@ -82,7 +83,7 @@ def add_expense():
 
     try:
         amount = float(amount_str)
-        date = datetime.now().strftime('%Y-%m-%d') 
+        date = datetime.now().strftime('%Y-%m-%d')
         conn = get_db_connection()
         conn.execute('INSERT INTO expenses (member_id, category, amount, date) VALUES (?, ?, ?, ?)',
                      (int(member_id), category, amount, date))
@@ -90,7 +91,7 @@ def add_expense():
         conn.close()
     except (ValueError, TypeError):
         print("Error adding expense: Invalid data.")
-    
+
     return redirect('/')
 
 @app.route('/summary')
@@ -103,51 +104,48 @@ def summary():
     if not members:
         return render_template('summary.html', summary=[], settlements=[])
 
+    # Calculate total spent by each member
     paid_by = {member['id']: 0 for member in members}
     member_names = {member['id']: member['name'] for member in members}
     total_spent = 0
-    
     for expense in expenses:
         if expense['member_id'] in paid_by:
             paid_by[expense['member_id']] += expense['amount']
             total_spent += expense['amount']
 
     num_members = len(members)
-    if num_members == 0 or total_spent == 0:
+    if total_spent == 0 or num_members == 0:
         summary_data = [{'name': name, 'total': paid_by.get(mid, 0)} for mid, name in member_names.items()]
         return render_template('summary.html', summary=summary_data, settlements=[])
 
+    # Calculate split and balances
     cost_per_person = total_spent / num_members
     balances = {mid: paid - cost_per_person for mid, paid in paid_by.items()}
 
     owes = {mid: -balance for mid, balance in balances.items() if balance < -0.01}
     owed = {mid: balance for mid, balance in balances.items() if balance > 0.01}
-    
+
+    # Determine settlements
     settlements = []
     owers_list = sorted(owes.items(), key=lambda x: x[1], reverse=True)
     owed_list = sorted(owed.items(), key=lambda x: x[1], reverse=True)
-
     ower_idx = 0
     owed_idx = 0
-    
+
     while ower_idx < len(owers_list) and owed_idx < len(owed_list):
         ower_id, ower_amount = owers_list[ower_idx]
         owed_id, owed_amount = owed_list[owed_idx]
         payment = min(ower_amount, owed_amount)
-        
-        if payment > 0.01: 
+        if payment > 0.01:
             settlements.append({
                 'owes': member_names[ower_id],
                 'owed': member_names[owed_id],
                 'amount': payment
             })
-
             ower_amount -= payment
             owed_amount -= payment
-            
             owers_list[ower_idx] = (ower_id, ower_amount)
             owed_list[owed_idx] = (owed_id, owed_amount)
-
         if ower_amount < 0.01:
             ower_idx += 1
         if owed_amount < 0.01:
@@ -156,7 +154,7 @@ def summary():
     summary_data = [{'name': name, 'total': paid_by.get(mid, 0)} for mid, name in member_names.items()]
     return render_template('summary.html', summary=summary_data, settlements=settlements)
 
-@app.route('/reset', methods=['POST']) 
+@app.route('/reset', methods=['POST'])
 def reset():
     conn = get_db_connection()
     conn.execute('DELETE FROM expenses')
@@ -165,8 +163,6 @@ def reset():
     conn.close()
     return redirect('/')
 
-# --- Run app ---
-if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 10000))  # Render sets PORT
-    app.run(host="0.0.0.0", port=port)
+# Run app for local testing (Render will use gunicorn)
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080, debug=True)
