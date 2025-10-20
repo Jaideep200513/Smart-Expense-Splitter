@@ -1,29 +1,25 @@
-Smart Expense Splitter 💰
+# Smart Expense Splitter 💰
 
 A simple, intuitive tool to manage shared expenses among a group of people. Add members, track expenses, and automatically calculate who owes whom.
 
-Built with Flask (Python backend) and a clean HTML/CSS frontend.
+Built with **Flask (Python backend)** and a clean **HTML/CSS frontend**.
 
-🚀 Live Demo
+## 🚀 Live Demo
 
 Check out the live version hosted on Render:
-🔗 Smart Expense Splitter
+[🔗 Smart Expense Splitter](https://smart-expense-splitter-hzkh.onrender.com/)
 
-🛠 Features
+## 🛠 Features
 
-Add and delete members dynamically
+- Add and delete members dynamically
+- Record expenses with category, payer, and amount
+- Automatically calculate total spent by each member
+- Generate settlements: who owes whom
+- Reset all data to start fresh
+- Responsive and minimalistic frontend
 
-Record expenses with category, payer, and amount
-
-Automatically calculate total spent by each member
-
-Generate settlements: who owes whom
-
-Reset all data to start fresh
-
-Responsive and minimalistic frontend
-
-📁 Project Structure
+## 📁 Project Structure
+```
 smart-expense-splitter/
 │
 ├── app.py             # Main Flask backend application
@@ -35,21 +31,17 @@ smart-expense-splitter/
 │   └── summary.html
 └── static/
     └── style.css      # Frontend styling
+```
 
-🔧 Technologies Used
+## 🔧 Technologies Used
 
-Python (Flask, SQLite)
+- Python (Flask, SQLite)
+- HTML / CSS / Jinja2 Templates
+- Docker (for containerized deployment)
+- Render (for hosting)
 
-HTML / CSS / Jinja2 Templates
+## ✨ Acknowledgements
 
-Docker (for containerized deployment)
-
-Render (for hosting)
-
-✨ Acknowledgements
-
-Backend powered by Flask
-
-Frontend built with HTML/CSS
-
-Deployed live on Render
+- Backend powered by Flask
+- Frontend built with HTML/CSS
+- Deployed live on Render
