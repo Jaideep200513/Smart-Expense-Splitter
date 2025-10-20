@@ -5,15 +5,39 @@ import os
 
 app = Flask(__name__)
 
-# --- Use a relative path for the database ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "expenses.db")
+# --- Use a temporary path for the database (works in Docker/Render) ---
+DB_PATH = "/tmp/expenses.db"
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH) 
     conn.row_factory = sqlite3.Row
     return conn
 
+# --- Initialize database if it doesn't exist ---
+def init_db():
+    conn = get_db_connection()
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL
+        )
+    ''')
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS expenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            member_id INTEGER NOT NULL,
+            category TEXT NOT NULL,
+            amount REAL NOT NULL,
+            date TEXT NOT NULL,
+            FOREIGN KEY(member_id) REFERENCES members(id)
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+init_db()  # Ensure tables exist at startup
+
+# --- Routes ---
 @app.route('/')
 def index():
     conn = get_db_connection()
@@ -29,7 +53,7 @@ def index():
 
 @app.route('/add_member', methods=['POST'])
 def add_member():
-    name = request.form['member_name']
+    name = request.form.get('member_name')
     if name: 
         conn = get_db_connection()
         conn.execute('INSERT OR IGNORE INTO members (name) VALUES (?)', (name,))
@@ -37,7 +61,6 @@ def add_member():
         conn.close()
     return redirect('/')
 
-# --- FUNCTION TO DELETE A MEMBER ---
 @app.route('/delete_member', methods=['POST'])
 def delete_member():
     member_id = request.form.get('member_id')
@@ -70,7 +93,6 @@ def add_expense():
     
     return redirect('/')
 
-# --- ADVANCED SUMMARY FUNCTION ---
 @app.route('/summary')
 def summary():
     conn = get_db_connection()
@@ -81,7 +103,6 @@ def summary():
     if not members:
         return render_template('summary.html', summary=[], settlements=[])
 
-    # 1. Calculate total paid by each member
     paid_by = {member['id']: 0 for member in members}
     member_names = {member['id']: member['name'] for member in members}
     total_spent = 0
@@ -90,25 +111,18 @@ def summary():
         if expense['member_id'] in paid_by:
             paid_by[expense['member_id']] += expense['amount']
             total_spent += expense['amount']
-        else:
-            print(f"Warning: Found expense for unknown member_id {expense['member_id']}")
 
-    # 2. Calculate the split
     num_members = len(members)
     if num_members == 0 or total_spent == 0:
         summary_data = [{'name': name, 'total': paid_by.get(mid, 0)} for mid, name in member_names.items()]
         return render_template('summary.html', summary=summary_data, settlements=[])
 
     cost_per_person = total_spent / num_members
-
-    # 3. Calculate balances
     balances = {mid: paid - cost_per_person for mid, paid in paid_by.items()}
-    
-    # 4. Separate into who owes and who is owed
+
     owes = {mid: -balance for mid, balance in balances.items() if balance < -0.01}
     owed = {mid: balance for mid, balance in balances.items() if balance > 0.01}
     
-    # 5. Calculate settlements
     settlements = []
     owers_list = sorted(owes.items(), key=lambda x: x[1], reverse=True)
     owed_list = sorted(owed.items(), key=lambda x: x[1], reverse=True)
@@ -139,13 +153,9 @@ def summary():
         if owed_amount < 0.01:
             owed_idx += 1
 
-    # 6. Prepare summary data for display
     summary_data = [{'name': name, 'total': paid_by.get(mid, 0)} for mid, name in member_names.items()]
-    
-    # 7. Pass both lists to the template
     return render_template('summary.html', summary=summary_data, settlements=settlements)
 
-# --- "RESET EXPENSES" FUNCTION ---
 @app.route('/reset', methods=['POST']) 
 def reset():
     conn = get_db_connection()
@@ -155,5 +165,8 @@ def reset():
     conn.close()
     return redirect('/')
 
-if __name__ == '__main__':
-    app.run(debug=True)
+# --- Run app ---
+if __name__ == "__main__":
+    import os
+    port = int(os.environ.get("PORT", 10000))  # Render sets PORT
+    app.run(host="0.0.0.0", port=port)
