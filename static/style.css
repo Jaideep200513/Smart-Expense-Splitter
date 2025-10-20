@@ -1,0 +1,34 @@
+body {
+  font-family: Arial, sans-serif;
+  max-width: 600px;
+  margin: auto;
+  padding: 20px;
+  background: #faf9f6; 
+}
+
+h1, h2 {
+  text-align: center;
+  color: #333;
+}
+
+form, ul {
+  margin: 20px 0;
+}
+
+input, select, button {
+  padding: 8px;
+  margin: 5px;
+}
+
+button, .btn {
+  background: #4CAF50;
+  color: white;
+  border: none;
+  cursor: pointer;
+  border-radius: 5px;
+  padding: 8px 12px;
+}
+
+.btn.danger {
+  background: #e74c3c;
+}

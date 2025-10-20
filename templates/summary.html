@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Expense Summary</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Expense Summary</h1>
+    
+    <h2>Total Spent by Each Member</h2>
+    <ul>
+        {% for s in summary %}
+            <li>{{ s['name'] }} spent a total of ₹{{ "%.2f"|format(s['total']) }}</li>
+        {% else %}
+            <li>No expenses to summarize yet.</li>
+        {% endfor %}
+    </ul>
+    
+    <div id="settlements">
+        <h2>Who Owes Who?</h2>
+        <ul>
+            {% for settlement in settlements %}
+                <li><b>{{ settlement.owes }}</b> owes <b>{{ settlement.owed }}</b> ₹{{ "%.2f"|format(settlement.amount) }}</li>
+            {% else %}
+                <li>Everyone is settled up!</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <p><a href="/" class="btn">Go Back</a></p>
+</body>
+</html>
