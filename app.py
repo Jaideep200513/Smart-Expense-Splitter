@@ -1,0 +1,334 @@
+from flask import Flask, render_template, request, redirect
+import sqlite3
+from datetime import datetime
+import os
+
+app = Flask(__name__)
+
+# Create persistent data folder
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+
+DB_PATH = os.path.join(DATA_DIR, "expenses.db")
+
+
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+@app.route('/')
+def index():
+    conn = get_db_connection()
+
+    members = conn.execute('SELECT * FROM members').fetchall()
+
+    expenses = conn.execute('''
+        SELECT expenses.id, members.name, expenses.category, expenses.amount, expenses.date
+        FROM expenses
+        JOIN members ON expenses.member_id = members.id
+        ORDER BY date DESC
+    ''').fetchall()
+
+    conn.close()
+
+    return render_template('index.html', members=members, expenses=expenses)
+
+
+@app.route('/add_member', methods=['POST'])
+def add_member():
+    name = request.form['member_name']
+
+    if name:
+        conn = get_db_connection()
+        conn.execute(
+            'INSERT OR IGNORE INTO members (name) VALUES (?)',
+            (name,)
+        )
+        conn.commit()
+        conn.close()
+
+    return redirect('/')
+
+
+@app.route('/delete_member', methods=['POST'])
+def delete_member():
+    member_id = request.form.get('member_id')
+
+    if member_id:
+        conn = get_db_connection()
+        conn.execute(
+            'DELETE FROM members WHERE id = ?',
+            (member_id,)
+        )
+        conn.commit()
+        conn.close()
+
+    return redirect('/')
+
+
+@app.route('/add_expense', methods=['POST'])
+def add_expense():
+
+    member_id = request.form.get('member_id')
+    category = request.form.get('category')
+    amount_str = request.form.get('amount')
+
+    if not all([member_id, category, amount_str]):
+        return redirect('/')
+
+    try:
+
+        amount = float(amount_str)
+        date = datetime.now().strftime('%Y-%m-%d')
+
+        conn = get_db_connection()
+
+        conn.execute(
+            '''
+            INSERT INTO expenses (member_id, category, amount, date)
+            VALUES (?, ?, ?, ?)
+            ''',
+            (int(member_id), category, amount, date)
+        )
+
+        conn.commit()
+        conn.close()
+
+    except (ValueError, TypeError):
+        print("Invalid expense data")
+
+    return redirect('/')
+
+@app.route('/delete_expense', methods=['POST'])
+def delete_expense():
+
+    expense_id = request.form['expense_id']
+
+    conn = get_db_connection()
+
+    conn.execute(
+        "DELETE FROM expenses WHERE id = ?",
+        (expense_id,)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return redirect('/')
+
+
+@app.route('/summary')
+def summary():
+
+    conn = get_db_connection()
+
+    members = conn.execute('SELECT * FROM members').fetchall()
+    expenses = conn.execute(
+        'SELECT member_id, amount FROM expenses'
+    ).fetchall()
+
+    conn.close()
+
+    if not members:
+        return render_template(
+            'summary.html',
+            summary=[],
+            settlements=[],
+            completed=[]
+        )
+
+    paid_by = {member['id']: 0 for member in members}
+    member_names = {member['id']: member['name'] for member in members}
+
+    total_spent = 0
+
+    for expense in expenses:
+
+        if expense['member_id'] in paid_by:
+
+            paid_by[expense['member_id']] += expense['amount']
+            total_spent += expense['amount']
+
+    num_members = len(members)
+
+    if num_members == 0 or total_spent == 0:
+
+        summary_data = [
+            {'name': name, 'total': paid_by.get(mid, 0)}
+            for mid, name in member_names.items()
+        ]
+
+        return render_template(
+            'summary.html',
+            summary=summary_data,
+            settlements=[],
+            completed=[]
+        )
+
+    cost_per_person = total_spent / num_members
+
+    balances = {mid: paid - cost_per_person for mid, paid in paid_by.items()}
+
+    # subtract completed repayments
+    conn = get_db_connection()
+    repayments = conn.execute(
+        "SELECT payer, receiver, amount FROM repayments"
+    ).fetchall()
+    conn.close()
+
+    name_to_id = {v: k for k, v in member_names.items()}
+
+    for r in repayments:
+        payer_id = name_to_id.get(r["payer"])
+        receiver_id = name_to_id.get(r["receiver"])
+        amount = r["amount"]
+
+        if payer_id and receiver_id:
+            balances[payer_id] += amount
+            balances[receiver_id] -= amount
+
+    owes = {
+        mid: -balance
+        for mid, balance in balances.items()
+        if balance < -0.01
+    }
+
+    owed = {
+        mid: balance
+        for mid, balance in balances.items()
+        if balance > 0.01
+    }
+
+    settlements = []
+
+    owers_list = sorted(
+        owes.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    owed_list = sorted(
+        owed.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    ower_idx = 0
+    owed_idx = 0
+
+    while ower_idx < len(owers_list) and owed_idx < len(owed_list):
+
+        ower_id, ower_amount = owers_list[ower_idx]
+        owed_id, owed_amount = owed_list[owed_idx]
+
+        payment = min(ower_amount, owed_amount)
+
+        if payment > 0.01:
+
+            settlements.append({
+                'owes': member_names[ower_id],
+                'owed': member_names[owed_id],
+                'amount': round(payment, 2)
+            })
+
+            ower_amount -= payment
+            owed_amount -= payment
+
+            owers_list[ower_idx] = (ower_id, ower_amount)
+            owed_list[owed_idx] = (owed_id, owed_amount)
+
+        if ower_amount < 0.01:
+            ower_idx += 1
+
+        if owed_amount < 0.01:
+            owed_idx += 1
+
+    summary_data = [
+        {'name': name, 'total': paid_by.get(mid, 0)}
+        for mid, name in member_names.items()
+    ]
+
+    conn = get_db_connection()
+
+    completed = conn.execute(
+        '''
+        SELECT payer, receiver, amount, date
+        FROM repayments
+        ORDER BY date DESC
+        '''
+    ).fetchall()
+
+    conn.close()
+
+    return render_template(
+        'summary.html',
+        summary=summary_data,
+        settlements=settlements,
+        completed=completed
+    )
+
+
+@app.route('/complete_payment', methods=['POST'])
+def complete_payment():
+
+    payer = request.form['payer']
+    receiver = request.form['receiver']
+    amount = request.form['amount']
+
+    conn = get_db_connection()
+
+    conn.execute(
+        '''
+        INSERT INTO repayments (payer, receiver, amount, date)
+        VALUES (?, ?, ?, date('now'))
+        ''',
+        (payer, receiver, amount)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return redirect('/summary')
+
+@app.route('/undo_payment', methods=['POST'])
+def undo_payment():
+
+    payer = request.form['payer']
+    receiver = request.form['receiver']
+    amount = request.form['amount']
+
+    conn = get_db_connection()
+
+    conn.execute(
+        """
+        DELETE FROM repayments
+        WHERE payer = ? AND receiver = ? AND amount = ?
+        LIMIT 1
+        """,
+        (payer, receiver, amount)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return redirect('/summary')
+
+@app.route('/reset', methods=['POST'])
+def reset():
+
+    conn = get_db_connection()
+
+    conn.execute('DELETE FROM expenses')
+    conn.execute('DELETE FROM sqlite_sequence WHERE name = ?', ('expenses',))
+
+    conn.commit()
+    conn.close()
+
+    return redirect('/')
+
+
+if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=8080)

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Summary — Expense Splitter</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<div class="wrap">
+
+  <!-- Header -->
+  <div class="hd">
+    <div class="hd-left">
+      <h1>Summary</h1>
+      <span class="hd-pip"></span>
+    </div>
+
+    <button class="toggle" id="themeToggle" aria-label="Toggle theme">
+      <div class="tg-thumb">
+        <span class="ic-moon"></span>
+        <span class="ic-sun"></span>
+      </div>
+    </button>
+  </div>
+
+
+  <a href="/" class="back">← Back to expenses</a>
+
+
+  <!-- Spending Breakdown -->
+  <div class="card">
+
+    <div class="ch">
+      <div class="ch-bar"></div>
+      <span class="ch-title">Spending Breakdown</span>
+    </div>
+
+    {% if summary %}
+    <div class="stat-grid">
+
+      {% for s in summary %}
+      <div class="stat">
+        <div class="stat-lbl">Total paid</div>
+        <div class="stat-val">₹{{ "%.2f"|format(s['total']) }}</div>
+        <div class="stat-name">{{ s['name'] }}</div>
+      </div>
+      {% endfor %}
+
+    </div>
+
+    {% else %}
+    <div class="empty">No data to display yet.</div>
+    {% endif %}
+
+  </div>
+
+
+  <!-- Settlements -->
+  <div class="card">
+
+    <div class="ch">
+      <div class="ch-bar"></div>
+      <span class="ch-title">Who Owes Who</span>
+
+      {% if settlements %}
+      <span class="ch-badge">{{ settlements|length }} pending</span>
+      {% endif %}
+
+    </div>
+
+
+    {% if settlements %}
+
+    <ul class="list">
+
+      {% for s in settlements %}
+      <li class="s-item">
+
+        <span class="s-from">{{ s['owes'] }}</span>
+        <span class="s-arrow">owes</span>
+        <span class="s-to">{{ s['owed'] }}</span>
+        <span class="s-amt">₹{{ "%.2f"|format(s['amount']) }}</span>
+
+        <form action="/complete_payment" method="POST" style="margin-left:auto;">
+          <input type="hidden" name="payer" value="{{ s['owes'] }}">
+          <input type="hidden" name="receiver" value="{{ s['owed'] }}">
+          <input type="hidden" name="amount" value="{{ s['amount'] }}">
+          <button type="submit" class="btn btn-p">Completed</button>
+        </form>
+
+      </li>
+      {% endfor %}
+
+    </ul>
+
+    {% else %}
+    <div class="settled">Everyone is settled up 🎉</div>
+    {% endif %}
+
+  </div>
+
+  <!-- Completed Payments -->
+
+<div class="card">
+
+  <div class="ch">
+    <div class="ch-bar"></div>
+    <span class="ch-title">Completed Payments</span>
+
+    {% if completed %}
+      <span class="ch-badge">{{ completed|length }} done</span>
+    {% endif %}
+
+  </div>
+
+  {% if completed %}
+
+  <ul class="list">
+
+    {% for c in completed %}
+    <li class="s-item">
+
+  <span class="s-from">{{ c['payer'] }}</span>
+  <span class="s-arrow">paid</span>
+  <span class="s-to">{{ c['receiver'] }}</span>
+  <span class="s-amt">₹{{ "%.2f"|format(c['amount']) }}</span>
+
+  <span style="opacity:.6; margin-left:10px;">
+    {{ c['date'] }}
+  </span>
+
+  <form action="/undo_payment" method="POST" style="margin-left:auto;">
+    <input type="hidden" name="payer" value="{{ c['payer'] }}">
+    <input type="hidden" name="receiver" value="{{ c['receiver'] }}">
+    <input type="hidden" name="amount" value="{{ c['amount'] }}">
+    <button type="submit" class="btn btn-d">Undo</button>
+  </form>
+
+</li>
+    {% endfor %}
+
+  </ul>
+
+  {% else %}
+
+  <div class="empty">No completed payments yet.</div>
+
+  {% endif %}
+
+</div>
+
+</div>
+
+
+
+<script>
+
+const html = document.documentElement;
+const btn = document.getElementById('themeToggle');
+
+const savedTheme = localStorage.getItem('ses-theme') || 'light';
+html.setAttribute('data-theme', savedTheme);
+
+btn.addEventListener('click', () => {
+
+  const current = html.getAttribute('data-theme');
+  const next = current === 'dark' ? 'light' : 'dark';
+
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('ses-theme', next);
+
+  btn.style.transform = 'scale(.9)';
+  setTimeout(() => btn.style.transform = '', 160);
+
+});
+
+</script>
+
+
+</body>
+</html>

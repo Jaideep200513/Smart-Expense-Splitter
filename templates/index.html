@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Expense Splitter</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<div class="wrap">
+
+<!-- Header -->
+<div class="hd">
+  <div class="hd-left">
+    <h1>Expense Splitter</h1>
+    <span class="hd-pip"></span>
+  </div>
+
+  <button class="toggle" id="themeToggle" aria-label="Toggle theme">
+    <div class="tg-thumb">
+      <span class="ic-moon"></span>
+      <span class="ic-sun"></span>
+    </div>
+  </button>
+</div>
+
+
+<!-- Add Member -->
+<div class="card">
+
+<div class="ch">
+<div class="ch-bar"></div>
+<span class="ch-title">Add Member</span>
+</div>
+
+<form action="/add_member" method="post">
+<div class="row">
+
+<div class="fg">
+<label class="fl">Name</label>
+<input type="text" name="member_name" placeholder="e.g. Alex" required>
+</div>
+
+<button type="submit" class="btn btn-p">Add</button>
+
+</div>
+</form>
+
+</div>
+
+
+
+<!-- Members -->
+<div class="card">
+
+<div class="ch">
+<div class="ch-bar"></div>
+<span class="ch-title">Members</span>
+<span class="ch-badge">{{ members|length }}</span>
+</div>
+
+{% if members %}
+
+<ul class="list">
+
+{% for m in members %}
+
+<li class="m-item">
+
+<div class="m-name">
+<div class="avatar">{{ m['name'][0].upper() }}</div>
+{{ m['name'] }}
+</div>
+
+<form action="/delete_member" method="post">
+<input type="hidden" name="member_id" value="{{ m['id'] }}">
+<button type="submit" class="btn btn-d">Remove</button>
+</form>
+
+</li>
+
+{% endfor %}
+
+</ul>
+
+{% else %}
+
+<div class="empty">
+No members yet.<br>
+Add one above to get started.
+</div>
+
+{% endif %}
+
+</div>
+
+
+
+<!-- Add Expense -->
+<div class="card">
+
+<div class="ch">
+<div class="ch-bar"></div>
+<span class="ch-title">Add Expense</span>
+</div>
+
+<form action="/add_expense" method="post">
+
+<div class="row">
+
+<div class="fg" style="flex:2;min-width:150px">
+<label class="fl">Description</label>
+<input type="text" name="category" placeholder="e.g. Dinner" required>
+</div>
+
+<div class="fg" style="min-width:110px">
+<label class="fl">Amount (₹)</label>
+<input type="number" step="0.01" min="0" name="amount" placeholder="0.00" required>
+</div>
+
+<div class="fg" style="min-width:130px">
+<label class="fl">Paid by</label>
+
+<select name="member_id" required>
+<option value="">— Select —</option>
+
+{% for m in members %}
+<option value="{{ m['id'] }}">{{ m['name'] }}</option>
+{% endfor %}
+
+</select>
+
+</div>
+
+</div>
+
+<button type="submit" class="btn btn-p btn-full">
+Add Expense
+</button>
+
+</form>
+
+</div>
+
+
+
+<!-- Expenses List -->
+<div class="card">
+
+<div class="ch">
+<div class="ch-bar"></div>
+<span class="ch-title">All Expenses</span>
+<span class="ch-badge">{{ expenses|length }}</span>
+</div>
+
+{% if expenses %}
+
+<ul class="list">
+
+{% for e in expenses %}
+
+<li class="e-item">
+
+<div class="e-left">
+<span class="e-cat">{{ e['category'] }}</span>
+<span class="e-meta">
+{{ e['name'] }} · {{ e['date'] }}
+</span>
+</div>
+
+<span class="e-amt">
+₹{{ "%.2f"|format(e['amount']) }}
+</span>
+
+<form action="/delete_expense" method="POST">
+<input type="hidden" name="expense_id" value="{{ e['id'] }}">
+<button type="submit" class="btn btn-d">Delete</button>
+</form>
+
+</li>
+
+{% endfor %}
+
+</ul>
+
+{% else %}
+
+<div class="empty">
+No expenses yet.<br>
+Add one above.
+</div>
+
+{% endif %}
+
+
+<div class="div"></div>
+
+
+<div class="actions">
+
+<a href="/summary" class="btn btn-p">
+View Summary
+</a>
+
+<form action="/reset" method="post">
+
+<button type="submit" class="btn btn-d"
+onclick="return confirm('Reset all expense data?')">
+Reset Data
+</button>
+
+</form>
+
+</div>
+
+</div>
+
+
+</div>
+
+
+
+<script>
+
+const html = document.documentElement;
+const btn = document.getElementById("themeToggle");
+
+const saved = localStorage.getItem("ses-theme") || "light";
+html.setAttribute("data-theme", saved);
+
+btn.addEventListener("click", () => {
+
+const next = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+
+html.setAttribute("data-theme", next);
+
+localStorage.setItem("ses-theme", next);
+
+btn.style.transform = "scale(.9)";
+setTimeout(() => btn.style.transform = "", 160);
+
+});
+
+</script>
+
+
+</body>
+</html>
