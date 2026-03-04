@@ -1,6 +1,2 @@
-<<<<<<< HEAD
-Flask==3.0.3
-=======
-Flask==3.0.3
->>>>>>> 5a3c44767c4b2af7b056bb81d56323b88a9f23ae
+Flask
 gunicorn
